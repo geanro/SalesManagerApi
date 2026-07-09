@@ -21,33 +21,48 @@ public class JwtService {
 
     @Value("${security.jwt.expiration-minutes}")
     private long EXPIRATION_MINUTES;
+
     @Value("${security.jwt.secret-key}")
     private String SECRET_KEY;
 
-    public String generateToken(User user, Map<String,Object> extraClaims) {
-        Date issuedAt= new Date(System.currentTimeMillis());
-        Date expiration= new Date(issuedAt.getTime()+(EXPIRATION_MINUTES*60*1000));
+    public String generateToken(User user, Map<String, Object> extraClaims) {
+
+        Date issuedAt = new Date(System.currentTimeMillis());
+        Date expiration = new Date(issuedAt.getTime() + (EXPIRATION_MINUTES * 60 * 1000));
 
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(user.getUsername())
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiration)
-                .setHeaderParam(Header.TYPE,Header.JWT_TYPE)
+                .setHeaderParam(Header.TYPE, Header.JWT_TYPE)
                 .signWith(generateKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
     private Key generateKey() {
-        byte[] secretAssByte= Decoders.BASE64.decode(SECRET_KEY);
-        return Keys.hmacShaKeyFor(secretAssByte);
+        byte[] secretAsBytes = Decoders.BASE64.decode(SECRET_KEY);
+        return Keys.hmacShaKeyFor(secretAsBytes);
     }
 
     public String extractUsername(String jwt) {
-        return ExtraAllClaims(jwt).getSubject();
+        return extractAllClaims(jwt).getSubject();
     }
 
-    private Claims ExtraAllClaims(String jwt) {
+    public Date extractExpiration(String jwt) {
+        return extractAllClaims(jwt).getExpiration();
+    }
+
+    public boolean isTokenValid(String jwt, User user) {
+        String username = extractUsername(jwt);
+        return username.equals(user.getUsername()) && !isTokenExpired(jwt);
+    }
+
+    private boolean isTokenExpired(String jwt) {
+        return extractExpiration(jwt).before(new Date());
+    }
+
+    private Claims extractAllClaims(String jwt) {
         return Jwts.parser()
                 .setSigningKey(generateKey())
                 .build()

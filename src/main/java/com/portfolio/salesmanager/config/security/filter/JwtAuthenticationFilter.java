@@ -1,9 +1,10 @@
 package com.portfolio.salesmanager.config.security.filter;
 
-
 import com.portfolio.salesmanager.entity.User;
 import com.portfolio.salesmanager.repository.UserRepository;
 import com.portfolio.salesmanager.service.JwtService;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,24 +30,67 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        //1. obetener el header que contiene el jwt
-        String authHeader= request.getHeader("Authorization");// bearer jwt
-        if (authHeader==null|| !authHeader.startsWith("Bearer ")){
-            filterChain.doFilter(request,response);
+        String path = request.getServletPath();
+
+        // Dejar pasar OPTIONS para CORS
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
             return;
         }
-        //2. obtener ese jwt del header
-        String jwt= authHeader.split(" ")[1];
-        //3. obtener subjetct/username  desde el jwt
-        String username= jwtService.extractUsername(jwt);
-        //4. setear un objeto authentication dentro del SecurityContext
-        User user = userRepo.findByUsername(username)
-                .orElseThrow(()->new UsernameNotFoundException("username no encontrado"));
-        UsernamePasswordAuthenticationToken authenticationToken= new UsernamePasswordAuthenticationToken(
-          username,null,user.getAuthorities());
 
-        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-        //5. ejecutar el resto de filtros
-        filterChain.doFilter(request,response);
+        // No validar JWT en rutas públicas
+        if (path.startsWith("/auth/")
+                || path.startsWith("/catalog/")
+                || path.equals("/error")) {
+
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Obtener header Authorization
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String jwt = authHeader.substring(7);
+
+        try {
+            String username = jwtService.extractUsername(jwt);
+
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                User user = userRepo.findByUsername(username)
+                        .orElseThrow(() -> new UsernameNotFoundException("username no encontrado"));
+
+                if (jwtService.isTokenValid(jwt, user)) {
+
+                    UsernamePasswordAuthenticationToken authenticationToken =
+                            new UsernamePasswordAuthenticationToken(
+                                    user,
+                                    null,
+                                    user.getAuthorities()
+                            );
+
+                    SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                }
+            }
+
+            filterChain.doFilter(request, response);
+
+        } catch (ExpiredJwtException e) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"message\":\"Token expirado. Inicia sesión nuevamente.\"}");
+
+        } catch (JwtException | IllegalArgumentException e) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"message\":\"Token inválido.\"}");
+        }
     }
 }
