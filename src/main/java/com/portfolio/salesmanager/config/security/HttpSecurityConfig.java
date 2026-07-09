@@ -15,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.util.List;
 
 @EnableWebSecurity
@@ -27,23 +28,27 @@ public class HttpSecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity)throws Exception{
+    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
 
         httpSecurity
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf->csrf.disable())
-                .sessionManagement(session->
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .authorizeHttpRequests(httpConfig->{
-                   httpConfig.requestMatchers(HttpMethod.POST,"/auth/login").permitAll();
-                   httpConfig.requestMatchers(HttpMethod.POST,"/auth/register").permitAll();
-                   httpConfig.requestMatchers("/catalog/**").permitAll();
-                   
-                   httpConfig.requestMatchers("/error").permitAll();
-                   httpConfig.anyRequest().authenticated();
+                .authorizeHttpRequests(httpConfig -> {
+
+                    httpConfig.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+
+                    httpConfig.requestMatchers(HttpMethod.POST, "/auth/login").permitAll();
+                    httpConfig.requestMatchers(HttpMethod.POST, "/auth/register").permitAll();
+                    httpConfig.requestMatchers("/catalog/**").permitAll();
+                    httpConfig.requestMatchers("/error").permitAll();
+
+                    // Todas las demás rutas requieren JWT
                 });
+
         return httpSecurity.build();
     }
 
@@ -53,7 +58,8 @@ public class HttpSecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOrigins(List.of(
-                "http://localhost:4200"
+                "http://localhost:4200",
+                "https://geanro.github.io"
         ));
 
         configuration.setAllowedMethods(List.of(
@@ -68,7 +74,12 @@ public class HttpSecurityConfig {
         configuration.setAllowedHeaders(List.of(
                 "Authorization",
                 "Content-Type",
-                "Accept"
+                "Accept",
+                "Origin"
+        ));
+
+        configuration.setExposedHeaders(List.of(
+                "Authorization"
         ));
 
         configuration.setAllowCredentials(true);
