@@ -47,6 +47,7 @@ public class HttpSecurityConfig {
                     httpConfig.requestMatchers("/error").permitAll();
 
                     // Todas las demás rutas requieren JWT
+                    httpConfig.anyRequest().authenticated();
                 });
 
         return httpSecurity.build();
